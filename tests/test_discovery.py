@@ -54,11 +54,33 @@ def test_jandy_absent_equipment_is_skipped():
         assert absent not in switches
 
 
-def test_jandy_macros_are_never_switches():
-    """macroN is non-empty in 1.6.17, but no one has verified its set.cgi name."""
+def test_jandy_macros_are_switches_but_disabled_until_named():
+    """Upstream supports macros: a macro the owner NAMES becomes a working switch.
+    Dropping them would delete a documented feature.
+
+    But Jandy reports macro1-macro6 whether or not any are configured, so presence
+    proves nothing. An unnamed macro is registered disabled rather than cluttering
+    every Jandy user's dashboard with six switches that do nothing.
+    """
+    inv = _inv("jandy_1617_status.xml", AUTELIS_JANDY)   # this unit has no names.xml
+    macros = {d.tag: d.enabled_default for d in inv if d.tag.startswith("macro")}
+    assert len(macros) == 6
+    assert not any(macros.values())      # all present, none enabled
+
+
+def test_jandy_named_macro_is_enabled():
+    names = {"macro1": "Spa Mode", "macro2": "MACRO2"}
+    inv = build_inventory(
+        load_xml("jandy_1617_status.xml"), PROFILES[AUTELIS_JANDY], names
+    )
+    enabled = {d.tag: d.enabled_default for d in inv if d.tag.startswith("macro")}
+    assert enabled["macro1"] is True     # the owner named it
+    assert enabled["macro2"] is False    # still the placeholder
+
+
+def test_jandy_undocumented_tags_are_ignored():
     inv = _inv("jandy_1617_status.xml", AUTELIS_JANDY)
     switches = _tags(inv, "switch")
-    assert not [t for t in switches if t.startswith("macro")]
     assert "htpmp" not in switches
     assert "auxx" not in switches
 

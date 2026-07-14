@@ -63,6 +63,12 @@ class BrandProfile:
     heat_sets: tuple[HeatSet, ...] = ()
     default_names: Mapping[str, str] = field(default_factory=dict)
 
+    # Circuits that are only ENABLED once the owner has actually named them on the
+    # controller. Jandy always reports macro1-macro6 whether or not any OneTouch macro
+    # is configured, so presence tells us nothing -- only a name does. Without this,
+    # every Jandy user would grow six switches that do nothing.
+    requires_label: frozenset[str] = frozenset()
+
     def role(self, tag: str) -> str:
         """Role of a tag. Unknown tags are ignored, never guessed at."""
         return self.roles.get(tag, ROLE_IGNORE)
@@ -99,16 +105,21 @@ JANDY = BrandProfile(
     solar_temp_tag="solartemp",
     supports_climate=True,
     roles=_roles(
-        circuit=("pump", "spa", "waterfall", "cleaner", "solarht", *_JANDY_AUX),
+        # macroN are circuits, and upstream supports them: a macro the owner has named
+        # becomes a working switch. They are `requires_label` below, because Jandy
+        # reports all six whether or not any are configured -- so a name, not presence,
+        # is what tells us the owner actually uses one.
+        circuit=(
+            "pump", "spa", "waterfall", "cleaner", "solarht",
+            *_JANDY_AUX, *_JANDY_MACRO,
+        ),
         heat=("poolht", "poolht2", "spaht"),
         setpoint=("poolsp", "poolsp2", "spasp"),
         temperature=("pooltemp", "spatemp", "airtemp", "solartemp"),
-        # pumplo/htpmp/auxx: undocumented, always empty in every capture.
-        # macroN: status.xml exposes them, but no doc or capture proves what name
-        # set.cgi accepts (the wiki only ever documents "1tch3"). Exposing them
-        # would ship switches that silently do nothing.
-        ignore=("pumplo", "htpmp", "auxx", "tempunits", *_JANDY_MACRO),
+        # pumplo/htpmp/auxx: undocumented, and empty in every capture we have.
+        ignore=("pumplo", "htpmp", "auxx", "tempunits"),
     ),
+    requires_label=frozenset(_JANDY_MACRO),
     heat_sets=(
         HeatSet("Pool Heat", "pooltemp", "poolsp", "poolht"),
         HeatSet("Spa Heat", "spatemp", "spasp", "spaht"),
@@ -124,6 +135,7 @@ JANDY = BrandProfile(
         "cleaner": "Cleaner",
         "waterfall": "Waterfall",
         **{f"aux{n}": f"Aux {n}" for n in range(1, 24)},
+        **{f"macro{n}": f"Macro {n}" for n in range(1, 7)},
     },
 )
 

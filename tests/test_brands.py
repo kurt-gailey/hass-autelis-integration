@@ -56,7 +56,12 @@ def test_jandy_roles():
     assert p.role("poolht") == ROLE_HEAT
     assert p.role("poolsp") == ROLE_SETPOINT
     assert p.role("pooltemp") == ROLE_TEMPERATURE
-    assert p.role("macro1") == ROLE_IGNORE        # set.cgi name unverified
+    # Macros are real circuits -- upstream turns a named macro into a working switch --
+    # but Jandy reports all six whether or not any are configured, so they are only
+    # ENABLED once the owner has named one. See requires_label.
+    assert p.role("macro1") == ROLE_CIRCUIT
+    assert "macro1" in p.requires_label
+    assert "aux1" not in p.requires_label         # presence IS proof for an aux relay
     assert p.role("htpmp") == ROLE_IGNORE
     assert p.role("auxx") == ROLE_IGNORE
     assert p.role("tempunits") == ROLE_IGNORE

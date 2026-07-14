@@ -83,12 +83,16 @@ JANDY_169 = [
 # ---------------------------------------------------------------------------
 # Jandy Aqualink RS, firmware 1.6.17 (upstream issue #6).
 #
-# Exists to prove macro1-6, htpmp and auxx are IGNORED rather than turned into switches
-# that would silently do nothing -- nobody has verified what name set.cgi accepts for a
-# Jandy macro.
+# htpmp and auxx are ignored: undocumented, and empty in every capture we have.
 #
-# This unit has no names.xml, so the labels below are OUR fallbacks. That is not evidence
-# the relays are unassigned, so they stay enabled: status.xml says they are installed, and
+# macro1-6 ARE exposed. Upstream supports macros -- a macro the owner names becomes a
+# working switch -- so dropping them would delete a documented feature. But Jandy reports
+# all six whether or not any are configured, so presence proves nothing and only a name
+# does. This unit has no names.xml, so all six are registered DISABLED rather than
+# cluttering the dashboard with switches that do nothing.
+#
+# The aux fallback labels below are OURS, not the device's. That is not evidence the
+# relays are unassigned, so they stay enabled: status.xml says they are installed, and
 # that is all we know.
 # ---------------------------------------------------------------------------
 JANDY_1617 = [
@@ -105,6 +109,12 @@ JANDY_1617 = [
     ("switch", "aux5", "Aux 5", True),
     ("switch", "aux6", "Aux 6", True),
     ("switch", "aux7", "Aux 7", True),
+    ("switch", "macro1", "Macro 1", False),   # unnamed => unconfigured OneTouch slot
+    ("switch", "macro2", "Macro 2", False),
+    ("switch", "macro3", "Macro 3", False),
+    ("switch", "macro4", "Macro 4", False),
+    ("switch", "macro5", "Macro 5", False),
+    ("switch", "macro6", "Macro 6", False),
     ("switch", "pump", "Pool", True),
     ("switch", "spa", "Spa", True),
 ]
@@ -239,10 +249,18 @@ def test_jandy_cleaner_on_aux1_produces_no_phantom():
     assert "cleaner" in tags
 
 
-def test_jandy_macros_never_become_switches():
-    """macroN is non-empty on 1.6.17, but nobody has verified its set.cgi name."""
+def test_jandy_macro_support_is_preserved_but_opt_in():
+    """Upstream's readme documents working Macro support; dropping it would be a
+    regression for the maintainer's own pool. But Jandy reports all six macros whether
+    configured or not, so an unnamed one is registered disabled rather than shipping six
+    dead switches to every user."""
+    macros = {tag: enabled for _, tag, _, enabled in JANDY_1617 if tag.startswith("macro")}
+    assert len(macros) == 6
+    assert not any(macros.values())
+
+
+def test_jandy_undocumented_tags_are_ignored():
     tags = {tag for _, tag, _, _ in JANDY_1617}
-    assert not [t for t in tags if t.startswith("macro")]
     assert "htpmp" not in tags
     assert "auxx" not in tags
 

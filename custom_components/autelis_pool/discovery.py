@@ -85,6 +85,13 @@ def _label(tag: str, profile: BrandProfile, names: dict[str, str]) -> tuple[str,
     if tag in names:
         label = names[tag]
         return label, not is_placeholder(label)
+
+    # Some circuits are opt-in: the controller reports them whether or not the owner
+    # uses them, so presence proves nothing and only a name does. Jandy always returns
+    # macro1-macro6. Without this, every Jandy user grows six switches that do nothing.
+    if tag in profile.requires_label:
+        return profile.default_names.get(tag, tag), False
+
     return profile.default_names.get(tag, tag), True
 
 

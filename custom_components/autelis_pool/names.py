@@ -20,9 +20,10 @@ _AUX_LABEL = re.compile(
     r'id\s*=\s*"aux(\d+)label"[^>]*?value\s*=\s*"([^"]*)"', re.IGNORECASE
 )
 
-# An unassigned relay keeps a placeholder label: "AUX5" (Hayward), "AUX9" (Jandy),
-# "AUX 2" (Pentair). The relay is real, the owner just has not wired it to anything.
-_PLACEHOLDER = re.compile(r"^aux\s*\d+$", re.IGNORECASE)
+# An unassigned output keeps a placeholder label: "AUX5" (Hayward), "AUX9" (Jandy),
+# "AUX 2" (Pentair), "MACRO1" (Jandy OneTouch). The output is real; the owner just has
+# not wired or configured it. Upstream skips exactly these prefixes.
+_PLACEHOLDER = re.compile(r"^(aux|macro)\s*\d+$", re.IGNORECASE)
 
 
 def is_placeholder(label: str) -> bool:
