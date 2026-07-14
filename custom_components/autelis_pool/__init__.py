@@ -7,6 +7,7 @@ from datetime import timedelta
 
 from homeassistant.const import CONF_HOST, CONF_PASSWORD
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import Throttle
 
 from .api import AutelisPoolAPI
@@ -38,9 +39,32 @@ async def async_setup_entry(hass, entry):
             "It may be disconnected or still starting up."
         )
 
+    live = {f"autelis {data.host} {item.tag}" for item in data.inventory}
+    live |= {f"autelis {data.host} {hs.current_tag}" for hs in data.heat_sets}
+    await async_remove_stale_entities(er.async_get(hass), live)
+
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = data
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def async_remove_stale_entities(registry, live_unique_ids: set[str]) -> None:
+    """Remove Autelis entities that discovery no longer produces.
+
+    Building switches from names.xml created entities for aux circuits whose
+    status.xml tag was empty -- equipment the owner does not have. They rendered as
+    permanently-off switches. Discovery does not produce them, so they must be
+    retired rather than left orphaned in the registry.
+
+    Only touches entities whose unique_id is ours ("autelis <host> <tag>").
+    """
+    for entity_id, entry in list(registry.entries.items()):
+        unique_id = entry.unique_id
+        if not isinstance(unique_id, str) or not unique_id.startswith("autelis "):
+            continue
+        if unique_id not in live_unique_ids:
+            _LOGGER.info("Removing stale Autelis entity %s (%s)", entity_id, unique_id)
+            registry.async_remove(entity_id)
 
 
 async def async_unload_entry(hass, entry):
