@@ -1,0 +1,124 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Autelis Pool Control</title>
+<link href="autelis.css" rel="stylesheet" type="text/css" />
+<script src="ajax.js" type="text/javascript"></script>
+</head>
+
+<body>
+<div id="shadow-one"><div id="shadow-two"><div id="shadow-three"><div id="shadow-four">
+<div id="page">
+
+<div style="padding:0 0 5px 5px"><img src="autelis.png" alt="Autelis" /></div>
+
+<div id="menu">
+<a href="settings.htm">Settings</a>
+<a href="alerts.htm">Alerts</a>
+<a href="http://autelis.com/wiki/index.php?title=Pool_Control_for_Hayward/Goldline" target="_blank">Help</a>
+<a href="systeminfo.htm">Exit</a>
+</div>
+
+<div id="content">
+<form method="post" action="javascript:doSubmit();" name="settings">
+<fieldset>
+<br></br>
+<div><label>New Password:</label>
+<input maxlength=15 type="password" id="authpw" value="" /></div>
+<div><label>Confirm Password:</label>
+<input maxlength=15 type="password" id="authpw2" value="" /></div>
+<div>&nbsp;</div>
+<div><label>Model:</label>
+<select id="model">
+<option>P-4</option>
+<option>PS-4</option>
+<option>PS-8</option>
+<option>PS-16</option>
+</select></div>
+<div>&nbsp;</div>
+<div>&nbsp;&nbsp;AUX Labels</div>
+<div><label>AUX1:</label>
+<input maxlength=15 type="text" id="aux1label" value="Pool Lights"/></div>
+<div><label>AUX2:</label>
+<input maxlength=15 type="text" id="aux2label" value="Spa Lights" /></div>
+<div><label>AUX3:</label>
+<input maxlength=15 type="text" id="aux3label" value="Blower" /></div>
+<div><label>AUX4:</label>
+<input maxlength=15 type="text" id="aux4label" value="Waterfall" /></div>
+<div><label>AUX5:</label>
+<input maxlength=15 type="text" id="aux5label" value="Cleaner" /></div>
+<div><label>AUX6:</label>
+<input maxlength=15 type="text" id="aux6label" value="AUX5" /></div>
+<div><label>AUX7:</label>
+<input maxlength=15 type="text" id="aux7label" value="AUX6" /></div>
+<div><label>AUX8:</label>
+<input maxlength=15 type="text" id="aux8label" value="AUX7" /></div>
+<div><label>AUX9:</label>
+<input maxlength=15 type="text" id="aux9label" value="AUX8" /></div>
+<div><label>AUX10:</label>
+<input maxlength=15 type="text" id="aux10label" value="AUX9" /></div>
+<div><label>AUX11:</label>
+<input maxlength=15 type="text" id="aux11label" value="AUX10" /></div>
+<div><label>AUX12:</label>
+<input maxlength=15 type="text" id="aux12label" value="AUX11" /></div>
+<div><label>AUX13:</label>
+<input maxlength=15 type="text" id="aux13label" value="AUX12" /></div>
+<div><label>AUX14:</label>
+<input maxlength=15 type="text" id="aux14label" value="AUX13" /></div>
+<div><label>AUX15:</label>
+<input maxlength=15 type="text" id="aux15label" value="AUX14" /></div><br></br>
+<div><input type="submit" class="sm" value="Save Changes" /></div>
+</fieldset>
+</form>
+<form method="post" action="/settings.htm" id="hiddensettings">
+</form>
+</div>
+<script type="text/javascript">
+<!--
+var model=2;
+// Fill the hidden form and submit
+function doSubmit() {
+var hform=document.getElementById("hiddensettings");
+var newelement;
+var pw1=document.getElementById("authpw").value;
+if(pw1.length>0)
+{
+if(pw1 == document.getElementById("authpw2").value)
+{
+	newelement = document.createElement("input");
+	newelement.setAttribute("type", "hidden");
+	newelement.setAttribute("name", "authpw");
+	newelement.value=pw1;
+	hform.appendChild(newelement);
+}
+else
+{
+	alert("Passwords do not match!");
+	return
+}
+}
+for(i=1; i<16; i++)
+{
+	newelement = document.createElement("input");
+	newelement.setAttribute("type", "hidden");
+	newelement.setAttribute("name", "aux" + i + "label");
+	newelement.value=document.getElementById("aux" + i + "label").value;
+	if(newelement.value.length>0)
+		hform.appendChild(newelement);
+}
+newelement = document.createElement("input");
+newelement.setAttribute("type", "hidden");
+newelement.setAttribute("name", "model");
+newelement.value=document.getElementById("model").selectedIndex;
+hform.appendChild(newelement);
+hform.submit();
+}
+document.getElementById("model").selectedIndex = model;
+//-->
+</script>
+
+</div></div></div></div></div>
+<div id="footer">Copyright &copy; 2014 Autelis, LLC</div>
+</body>
+</html>
