@@ -12,27 +12,15 @@ AUTELIS_USERNAME = "admin"
 
 AUTELIS_PLATFORMS = ["sensor", "switch", "climate"] # ["binary_sensor", "climate", "sensor", "weather"]
 
-
-TEMP_SENSORS = {
-    "pooltemp": ["Temperature", "Pool"],
-    "spatemp": ["Temperature", "Spa"],
-    "airtemp": ["Temperature", "Air"],
-    "solartemp": ["Temperature", "Solar"],
-}
-
-HEAT_SET = {
-    "Pool Heat": ["pooltemp", "poolsp", "poolht"],
-    "Spa Heat": ["spatemp", "spasp", "spaht"],
-}
-
-CIRCUITS = {
-    "pump": "Pool",
-    "spa": "Spa",
-    "solarht": "Solar Heating",
-    "cleaner": "Cleaner"
-}
+# Which type of pool controller the Autelis unit is bridged to.
+# Jandy/Pentair values match upstream's feature/pentair-support branch.
+AUTELIS_JANDY = 0
+AUTELIS_PENTAIR = 1
+AUTELIS_HAYWARD = 2
+AUTELIS_UNKNOWN = -1
 
 PLATFORMS = [
+    Platform.BINARY_SENSOR,
     Platform.CLIMATE,
     Platform.SENSOR,
     Platform.SWITCH,

@@ -15,9 +15,8 @@ from homeassistant.const import (
 from homeassistant.util import Throttle
 
 from .const import (
-    DOMAIN, 
-    AUTELIS_PLATFORMS, 
-    TEMP_SENSORS,
+    DOMAIN,
+    AUTELIS_PLATFORMS,
     STATE_AUTO,
     STATE_SERVICE,
     PLATFORMS
