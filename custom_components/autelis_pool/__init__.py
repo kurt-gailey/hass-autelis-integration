@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import timedelta
 
 from homeassistant.const import CONF_HOST, CONF_PASSWORD
@@ -20,14 +21,43 @@ _LOGGER = logging.getLogger(__name__)
 
 MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=60)
 
+_SCHEME = re.compile(r"^https?://", re.IGNORECASE)
+
+
+def clean_host(host: str) -> str:
+    """The host with any scheme and trailing slash removed.
+
+    Used for unique_ids and log lines, and kept stable whether or not the user typed
+    'http://'. A bare IP or 'ip:port' passes through unchanged, so existing users'
+    entity identities do not move.
+    """
+    return _SCHEME.sub("", host.strip()).rstrip("/")
+
+
+def base_url(host: str) -> str:
+    """A well-formed base URL ending in '/', whatever the user pasted in.
+
+    People routinely paste 'http://1.2.3.4' into the host field. Without this the code
+    built 'http://http://1.2.3.4/', and aiohttp tried to resolve a host literally named
+    'http' on port 80 -- the "Cannot connect to host http:80" DNS timeout. An explicit
+    https:// is preserved; anything else gets http://.
+    """
+    host = host.strip()
+    if not _SCHEME.match(host):
+        host = f"http://{host}"
+    return host.rstrip("/") + "/"
+
 
 async def async_setup_entry(hass, entry):
     """Set up one Autelis controller."""
-    host = entry.data[CONF_HOST]
+    raw_host = entry.data[CONF_HOST]
     password = entry.data[CONF_PASSWORD]
-    # The API is injected rather than built inside AutelisData, so the polling and
-    # discovery logic can be tested without a running Home Assistant.
-    data = AutelisData(host, AutelisPoolAPI(hass, f"http://{host}/", password))
+    # Normalise here rather than only in the config flow, so an entry already saved with
+    # a scheme in the host (e.g. "http://172.16.20.27") is repaired on the next load
+    # without the user having to remove and re-add it.
+    data = AutelisData(
+        clean_host(raw_host), AutelisPoolAPI(hass, base_url(raw_host), password)
+    )
 
     await data.async_refresh()
 
@@ -41,30 +71,31 @@ async def async_setup_entry(hass, entry):
 
     live = {f"autelis {data.host} {item.tag}" for item in data.inventory}
     live |= {f"autelis {data.host} {hs.current_tag}" for hs in data.heat_sets}
-    await async_remove_stale_entities(er.async_get(hass), live)
+    async_remove_stale_entities(er.async_get(hass), entry.entry_id, live)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = data
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
-async def async_remove_stale_entities(registry, live_unique_ids: set[str]) -> None:
+def async_remove_stale_entities(registry, config_entry_id, live_unique_ids: set[str]) -> None:
     """Remove Autelis entities that discovery no longer produces.
 
     Building switches from names.xml created entities for aux circuits whose
     status.xml tag was empty -- equipment the owner does not have. They rendered as
-    permanently-off switches. Discovery does not produce them, so they must be
-    retired rather than left orphaned in the registry.
+    permanently-off switches. Discovery does not produce them, so they must be retired
+    rather than left orphaned in the registry.
 
-    Only touches entities whose unique_id is ours ("autelis <host> <tag>").
+    Scoped to this config entry via async_entries_for_config_entry, so it only ever
+    touches this integration's own entities -- no unique_id prefix guessing, and no
+    reaching into registry internals.
     """
-    for entity_id, entry in list(registry.entries.items()):
-        unique_id = entry.unique_id
-        if not isinstance(unique_id, str) or not unique_id.startswith("autelis "):
-            continue
-        if unique_id not in live_unique_ids:
-            _LOGGER.info("Removing stale Autelis entity %s (%s)", entity_id, unique_id)
-            registry.async_remove(entity_id)
+    for entry in er.async_entries_for_config_entry(registry, config_entry_id):
+        if entry.unique_id not in live_unique_ids:
+            _LOGGER.info(
+                "Removing stale Autelis entity %s (%s)", entry.entity_id, entry.unique_id
+            )
+            registry.async_remove(entry.entity_id)
 
 
 async def async_unload_entry(hass, entry):
