@@ -1,85 +1,70 @@
-"""Support for Autelis sensors."""
-
-from homeassistant.const import (
-    UnitOfTemperature,
-    PERCENTAGE,
-)
-from homeassistant.helpers.entity import Entity
+"""Autelis temperature sensors."""
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
-    SensorEntityDescription,
     SensorStateClass,
 )
+from homeassistant.const import UnitOfTemperature
 
-from .const import _LOGGER, DOMAIN, TEMP_SENSORS
-
+from .const import _LOGGER, DOMAIN
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Set up autelis temperature sensors."""
-    data = hass.data[DOMAIN]
-    dev = []
-    for item in TEMP_SENSORS.items():
-        dev.append(AutelisSensor(data, item[0], item[1][1], item[1][0]))
+    """Create a sensor for each temperature reading discovery found."""
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    async_add_entities(
+        [
+            AutelisTemperature(data, item.tag, item.name)
+            for item in data.inventory
+            if item.platform == "sensor"
+        ],
+        True,
+    )
 
-    async_add_entities(dev, True)
 
+class AutelisTemperature(SensorEntity):
+    """One temperature reading."""
 
-class AutelisSensor(Entity):
-    """Representation of an Autelis sensor."""
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, data, sensor_name, friendly_name, sensor_type):
-        """Initialize the sensor."""
-
-        tempunits = UnitOfTemperature.FAHRENHEIT if data.sensors["tempunits"] == "F" else UnitOfTemperature.CELSIUS
-        
-
+    def __init__(self, data, sensor_name, friendly_name):
         self.data = data
-        self._name = f"{friendly_name} {sensor_type}"
         self.sensor_name = sensor_name
-        self.type = sensor_type
-        self._state = None
-        self._unit_of_measurement = tempunits
-
-        _LOGGER.debug(f"adding sensor {sensor_name}")
+        self.friendly_name = friendly_name
+        _LOGGER.debug("adding sensor %s (%s)", sensor_name, friendly_name)
 
     @property
     def name(self):
-        """Return the name of the sensor."""
-        return self._name
+        return self.friendly_name
 
     @property
     def unique_id(self):
-        """Return a unique identifier for this sensor."""
         return f"autelis {self.data.host} {self.sensor_name}"
-                
-    @property
-    def device_class(self):
-        """Return the device class of the sensor."""
-        if self.type in (SensorDeviceClass.TEMPERATURE):
-            return self.type
-        return None
 
     @property
-    def state(self):
-        """Return the state of the sensor."""
-        if self._state in ["unknown"]:
+    def native_unit_of_measurement(self):
+        if self.data.sensors.get("tempunits") == "C":
+            return UnitOfTemperature.CELSIUS
+        return UnitOfTemperature.FAHRENHEIT
+
+    @property
+    def native_value(self):
+        """The reading, verbatim.
+
+        The old code divided by 10, which is wrong for this API -- <pooltemp>88</>
+        means 88 degrees. It was dead code only because `self.type == "temperature"`
+        never matched the capitalised "Temperature" it was given. Fixing the
+        capitalisation without removing the division would have broken every reading.
+        """
+        raw = self.data.sensors.get(self.sensor_name)
+        if raw is None or raw == "":
+            return None
+        try:
+            return int(raw)
+        except ValueError:
             return None
 
-        if self.type == "temperature":
-            return float(self._state) / 10
-
-        return self._state
-
-    @property
-    def unit_of_measurement(self):
-        """Return the unit of measurement this sensor expresses itself in."""
-        return self._unit_of_measurement
-
     async def async_update(self):
-        """Get the latest state of the sensor."""
         await self.data.update()
-
-        self._state = self.data.sensors[self.sensor_name]
