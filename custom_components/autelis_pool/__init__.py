@@ -1,143 +1,127 @@
-"""Support for controlling an Autelis pool controller (from www.autelis.com which no longer exists) to control one of several different types of pool control systems"""
-import asyncio
-from datetime import timedelta
+"""Autelis pool controller integration."""
+
+from __future__ import annotations
+
 import logging
-import time
+from datetime import timedelta
 
-
-from homeassistant.const import (
-    CONF_PASSWORD,
-    CONF_HOST,
-    CONF_NAME,
-    STATE_ON,
-    STATE_OFF
-)
+from homeassistant.const import CONF_HOST, CONF_PASSWORD
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.util import Throttle
 
-from .const import (
-    DOMAIN,
-    AUTELIS_PLATFORMS,
-    STATE_AUTO,
-    STATE_SERVICE,
-    PLATFORMS
-)
 from .api import AutelisPoolAPI
+from .brands import PROFILES, detect_brand
+from .const import AUTELIS_UNKNOWN, DOMAIN, PLATFORMS, STATE_AUTO, STATE_SERVICE
+from .discovery import build_heat_sets, build_inventory, snapshot
+from .names import parse_aux_labels_html, parse_names_xml
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_NAME = "Pool Control"
 MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=60)
 
 
-def setup(hass, config):
-    """Set up the Autelis component."""
-    
-    return True
-
 async def async_setup_entry(hass, entry):
-    """Set up autelis via a config entry."""
+    """Set up one Autelis controller."""
     host = entry.data[CONF_HOST]
     password = entry.data[CONF_PASSWORD]
+    # The API is injected rather than built inside AutelisData, so the polling and
+    # discovery logic can be tested without a running Home Assistant.
+    data = AutelisData(host, AutelisPoolAPI(hass, f"http://{host}/", password))
 
-    data = AutelisData(hass, entry, host=host, password=password)
+    await data.async_refresh()
 
-    await data.update()
-
-    if data.sensors is None:
-        _LOGGER.error("Unable to connect to Autelis device")
-        return False
-
-    hass.data[DOMAIN] = data
-
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-#    for component in AUTELIS_PLATFORMS:
-#        hass.async_create_task(
-#            hass.config_entries.async_forward_entry_setup(entry, component)
-#        )
-
-    return True
-
-async def async_unload_entry(hass, entry):
-    """Unload the config entry and platforms."""
-    hass.data.pop(DOMAIN)
-
-    tasks = []
-    for platform in AUTELIS_PLATFORMS:
-        tasks.append(
-            hass.config_entries.async_forward_entry_unload(entry, platform)
+    if data.brand == AUTELIS_UNKNOWN:
+        # Sparse or unreachable XML. Guessing a brand here would build a wrong
+        # entity set and persist it into the registry, so refuse and retry later.
+        raise ConfigEntryNotReady(
+            f"Could not identify the pool controller at {data.host}. "
+            "It may be disconnected or still starting up."
         )
 
-    return all(await asyncio.gather(*tasks))
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = data
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
+
+
+async def async_unload_entry(hass, entry):
+    """Unload one controller, leaving any others alone."""
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        hass.data[DOMAIN].pop(entry.entry_id)
+    return unloaded
+
 
 class AutelisData:
-    """
-    Handle getting the latest data from autelis so platforms can use it.
-    """
+    """Polls one controller and holds its latest snapshot."""
 
-    def __init__(self, hass, entry, host, password):
-        """Initialize the Autelis data object."""
-        self._hass = hass
-        self._entry = entry
+    def __init__(self, host, api):
         self.host = host
-        self.password = password
-        self.api = AutelisPoolAPI(hass, f"http://{host}/", password)
-        self.sensors = { }
-        self.sensors2 = { }
-        self.equipment = { }
-        self.mode = ""
-        self.names = { }
+        self.api = api
+
+        self.brand = AUTELIS_UNKNOWN
+        self.profile = None
+        self.names: dict[str, str] = {}
+        self.inventory = []
+        self.heat_sets = []
+        self.equipment: dict[str, str] = {}
+        self.sensors: dict[str, str] = {}
+        self.system: dict[str, str] = {}
+        self.mode = STATE_SERVICE
+
+    async def async_refresh(self):
+        """Poll status.xml and rebuild the snapshot from scratch."""
+        status = await self.api.get("status.xml")
+        if status is None:
+            return
+
+        if self.profile is None:
+            # Brand and inventory are resolved ONCE, at setup. Re-running discovery
+            # every poll would let a transient sparse response churn the entity
+            # registry.
+            self.brand = detect_brand(status)
+            if self.brand == AUTELIS_UNKNOWN:
+                return
+            self.profile = PROFILES[self.brand]
+            self.names = await self._async_load_names()
+            self.inventory = build_inventory(status, self.profile, self.names)
+            self.heat_sets = build_heat_sets(status, self.profile)
+            _LOGGER.info(
+                "Detected %s controller at %s: %d entities",
+                self.profile.key,
+                self.host,
+                len(self.inventory),
+            )
+
+        snap = snapshot(status, self.profile)
+        self.system, self.equipment, self.sensors = (
+            snap["system"],
+            snap["equipment"],
+            snap["temp"],
+        )
+
+        opmode = self.system.get("opmode")
+        self.mode = STATE_AUTO if opmode == "0" else STATE_SERVICE
+
+    async def _async_load_names(self) -> dict[str, str]:
+        """Fetch the owner's equipment labels, in whichever form this brand keeps them.
+
+        Jandy and Pentair serve names.xml. Hayward 404s that, but keeps its aux labels
+        on the Setup page -- editable, persisted on the unit, and rendered into the
+        HTML it serves. Either way, these are the OWNER's names, not ours.
+
+        Failure is never fatal: we fall back to generic labels.
+        """
+        endpoint = self.profile.names_endpoint
+        if not endpoint:
+            return {}
+
+        if self.profile.names_format == "html":
+            return parse_aux_labels_html(
+                await self.api.get_text(endpoint, optional=True)
+            )
+        return parse_names_xml(await self.api.get(endpoint, optional=True))
 
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     async def update(self):
-        """Get the latest data from autelis controller"""
-
-        if self.names is None or len(self.names) == 0:
-            self.names = await self.api.get_names()
-        
-        _LOGGER.debug("Updating autelis")
-        status = await self.api.get("status.xml")
-
-        temps = status.find("temp")
-
-        if temps is not None:
-            for child in temps:
-                value = child.text
-                self.sensors[child.tag] = value
-        else:
-            _LOGGER.error("temps is None")
-            
-        equip = status.find("equipment")
-
-        if equip is not None:
-            for child in equip:
-                value = child.text
-                self.equipment[child.tag] = value
-        else:
-            _LOGGER.error("equip is None")
-        
-        #vbat = status.find(".//vbat")
-        
-        #if vbat is not None:
-        #    self.sensors2["vbat"] = vbat * 0.01464
-        #else:
-        #    _LOGGER.debug("vbat does not have a value")
-        
-        #lowbat = status.find(".//lowbat")
-        
-        #if lowbat is not None:
-        #    self.sensors2["lowbat"] = lowbat == "1"
-        #else:
-        #    _LOGGER.debug("lowbat does not have a value")
-        
-        opmode = status.find(".//opmode")
-        # freeze = status.find("freeze")
-
-        if opmode is not None:
-            self.mode = STATE_AUTO if opmode.text == "0" else STATE_SERVICE
-        else:
-            self.mode = STATE_SERVICE
-            _LOGGER.error("opmode is None")
-
-        # self.freeze = STATE_ON if freeze && freeze.text == "1" else STATE_OFF
-        return
+        """Throttled refresh, called by entities during their update."""
+        await self.async_refresh()

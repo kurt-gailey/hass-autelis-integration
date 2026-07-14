@@ -10,8 +10,6 @@ AUTELIS_PASSWORD = "password"
 
 AUTELIS_USERNAME = "admin"
 
-AUTELIS_PLATFORMS = ["sensor", "switch", "climate"] # ["binary_sensor", "climate", "sensor", "weather"]
-
 # Which type of pool controller the Autelis unit is bridged to.
 # Jandy/Pentair values match upstream's feature/pentair-support branch.
 AUTELIS_JANDY = 0
