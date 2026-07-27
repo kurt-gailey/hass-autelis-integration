@@ -39,11 +39,12 @@ temperatures at the panel. (Jandy and Pentair are unaffected — they get full c
 Some Hayward installations use the controller's filter-pump circuit as a three-step cycle:
 **Off → High → Low → Off**. Autelis reports only whether the pump is running, not its speed.
 
-For a verified Hayward controller, the integration keeps the normal **Filter Pump** switch for
-starting the pump at High and adds a **Filter Pump Low / Off** button. Each press of that button
-sends the controller's `pump=0` command: it moves High to Low, then Low to Off. The button is
-intentionally not a three-state selector because the controller cannot report which running speed
-is active, especially after somebody uses the physical panel.
+For a verified Hayward controller, the normal **Filter Pump** switch truthfully represents only
+whether the pump is running. Turning it **On** sends `pump=1`, which starts the pump at High.
+Turning it **Off** sends `pump=0`: from High, the controller moves to Low and reports the pump
+still running, so Home Assistant returns the switch to On; a second Off action moves Low to Off.
+This is intentionally not a three-state selector because the controller cannot report which
+running speed is active, especially after somebody uses the physical panel.
 
 # What you get
 

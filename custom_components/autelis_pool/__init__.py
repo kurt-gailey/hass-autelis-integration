@@ -13,7 +13,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util import Throttle
 
 from .api import AutelisPoolAPI
-from .brands import HAYWARD, PROFILES, detect_brand
+from .brands import PROFILES, detect_brand
 from .const import AUTELIS_UNKNOWN, DOMAIN, PLATFORMS, STATE_AUTO, STATE_SERVICE
 from .discovery import build_heat_sets, build_inventory, snapshot
 from .names import parse_aux_labels_html, parse_names_xml
@@ -50,16 +50,9 @@ def base_url(host: str) -> str:
 
 
 def live_entity_ids(data) -> set[str]:
-    """Return every entity identity that this controller configuration should keep.
-
-    Most entities come from `status.xml` inventory. The Hayward pump-down action is a
-    deliberate static capability, so it must be listed here too or stale-entity cleanup
-    would remove its registry entry on every integration reload.
-    """
+    """Return every entity identity that discovery produced for this controller."""
     live = {f"autelis {data.host} {item.tag}" for item in data.inventory}
     live |= {f"autelis {data.host} {hs.current_tag}" for hs in data.heat_sets}
-    if data.profile == HAYWARD:
-        live.add(f"autelis {data.host} filter-pump-low-off")
     return live
 
 

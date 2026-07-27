@@ -1,10 +1,8 @@
-from types import SimpleNamespace
 from xml.etree import ElementTree
 
 import pytest
 
-from custom_components.autelis_pool import AutelisData, live_entity_ids
-from custom_components.autelis_pool.brands import HAYWARD
+from custom_components.autelis_pool import AutelisData
 from custom_components.autelis_pool.const import AUTELIS_HAYWARD, AUTELIS_UNKNOWN
 from tests.conftest import load_xml
 
@@ -56,13 +54,6 @@ async def test_unknown_brand_refuses_to_guess():
     assert data.brand == AUTELIS_UNKNOWN
     assert data.profile is None
     assert data.inventory == []
-
-
-def test_hayward_button_is_preserved_by_stale_entity_cleanup():
-    """The static button must remain live across every integration reload."""
-    data = SimpleNamespace(host="1.2.3.4", profile=HAYWARD, inventory=[], heat_sets=[])
-
-    assert "autelis 1.2.3.4 filter-pump-low-off" in live_entity_ids(data)
 
 
 async def test_refresh_notifies_entity_state_listeners():
