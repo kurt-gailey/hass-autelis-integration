@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from datetime import timedelta
 
 from homeassistant.const import CONF_HOST, CONF_PASSWORD
@@ -12,7 +13,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util import Throttle
 
 from .api import AutelisPoolAPI
-from .brands import PROFILES, detect_brand
+from .brands import HAYWARD, PROFILES, detect_brand
 from .const import AUTELIS_UNKNOWN, DOMAIN, PLATFORMS, STATE_AUTO, STATE_SERVICE
 from .discovery import build_heat_sets, build_inventory, snapshot
 from .names import parse_aux_labels_html, parse_names_xml
@@ -48,6 +49,20 @@ def base_url(host: str) -> str:
     return host.rstrip("/") + "/"
 
 
+def live_entity_ids(data) -> set[str]:
+    """Return every entity identity that this controller configuration should keep.
+
+    Most entities come from `status.xml` inventory. The Hayward pump-down action is a
+    deliberate static capability, so it must be listed here too or stale-entity cleanup
+    would remove its registry entry on every integration reload.
+    """
+    live = {f"autelis {data.host} {item.tag}" for item in data.inventory}
+    live |= {f"autelis {data.host} {hs.current_tag}" for hs in data.heat_sets}
+    if data.profile == HAYWARD:
+        live.add(f"autelis {data.host} filter-pump-low-off")
+    return live
+
+
 async def async_setup_entry(hass, entry):
     """Set up one Autelis controller."""
     raw_host = entry.data[CONF_HOST]
@@ -69,8 +84,7 @@ async def async_setup_entry(hass, entry):
             "It may be disconnected or still starting up."
         )
 
-    live = {f"autelis {data.host} {item.tag}" for item in data.inventory}
-    live |= {f"autelis {data.host} {hs.current_tag}" for hs in data.heat_sets}
+    live = live_entity_ids(data)
     async_remove_stale_entities(er.async_get(hass), entry.entry_id, live)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = data
@@ -121,7 +135,18 @@ class AutelisData:
         self.equipment: dict[str, str] = {}
         self.sensors: dict[str, str] = {}
         self.system: dict[str, str] = {}
+        self._state_listeners: list[Callable[[], None]] = []
         self.mode = STATE_SERVICE
+
+    def async_add_state_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
+        """Register an entity callback for completed controller refreshes."""
+        self._state_listeners.append(listener)
+
+        def remove() -> None:
+            if listener in self._state_listeners:
+                self._state_listeners.remove(listener)
+
+        return remove
 
     async def async_refresh(self):
         """Poll status.xml and rebuild the snapshot from scratch."""
@@ -156,6 +181,8 @@ class AutelisData:
 
         opmode = self.system.get("opmode")
         self.mode = STATE_AUTO if opmode == "0" else STATE_SERVICE
+        for listener in tuple(self._state_listeners):
+            listener()
 
     async def _async_load_names(self) -> dict[str, str]:
         """Fetch the owner's equipment labels, in whichever form this brand keeps them.

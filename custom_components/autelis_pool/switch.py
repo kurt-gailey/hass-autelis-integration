@@ -52,6 +52,11 @@ class AutelisCircuit(SwitchEntity):
     def is_on(self):
         return self.data.equipment.get(self.equipment_name, "0") not in _OFF_VALUES
 
+    async def async_added_to_hass(self):
+        """Write fresh state immediately after any shared controller refresh."""
+        await super().async_added_to_hass()
+        self.async_on_remove(self.data.async_add_state_listener(self.async_write_ha_state))
+
     async def async_turn_on(self, **kwargs):
         await self._set(1)
 
