@@ -26,6 +26,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 class AutelisCircuit(SwitchEntity):
     """One controllable circuit."""
 
+    _attr_force_update = True
+
     def __init__(self, data, equipment_name, friendly_name, enabled_default=True):
         self.data = data
         self.equipment_name = equipment_name

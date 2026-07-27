@@ -41,6 +41,13 @@ def test_unique_id_matches_the_existing_scheme():
     assert switch.unique_id == "autelis 1.2.3.4 pump"
 
 
+def test_force_update_republishes_an_unchanged_running_state():
+    """High -> Low stays on, but the frontend needs the confirmed on-state event."""
+    switch = AutelisCircuit(_Data({"pump": "1"}), "pump", "Filter Pump")
+
+    assert switch.force_update is True
+
+
 class _PumpApi:
     def __init__(self):
         self.calls = []
