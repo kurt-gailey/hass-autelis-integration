@@ -54,3 +54,16 @@ async def test_unknown_brand_refuses_to_guess():
     assert data.brand == AUTELIS_UNKNOWN
     assert data.profile is None
     assert data.inventory == []
+
+
+async def test_refresh_notifies_entity_state_listeners():
+    """A command refresh must promptly update entities sharing the snapshot."""
+    data = AutelisData("1.2.3.4", _FakeAPI(load_xml("hayward_1011_status.xml")))
+    calls = []
+    remove = data.async_add_state_listener(lambda: calls.append("updated"))
+
+    await data.async_refresh()
+    remove()
+    await data.async_refresh()
+
+    assert calls == ["updated"]

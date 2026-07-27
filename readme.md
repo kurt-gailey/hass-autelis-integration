@@ -34,6 +34,18 @@ not of this integration, and all three routes are genuinely closed:
 So on Hayward you get a **Heater Running** sensor rather than a thermostat. Set your
 temperatures at the panel. (Jandy and Pentair are unaffected — they get full climate entities.)
 
+## Hayward two-speed filter pumps
+
+Some Hayward installations use the controller's filter-pump circuit as a three-step cycle:
+**Off → High → Low → Off**. Autelis reports only whether the pump is running, not its speed.
+
+For a verified Hayward controller, the normal **Filter Pump** switch truthfully represents only
+whether the pump is running. Turning it **On** sends `pump=1`, which starts the pump at High.
+Turning it **Off** sends `pump=0`: from High, the controller moves to Low and reports the pump
+still running, so Home Assistant returns the switch to On; a second Off action moves Low to Off.
+This is intentionally not a three-state selector because the controller cannot report which
+running speed is active, especially after somebody uses the physical panel.
+
 # What you get
 
 * A config UI for the host and password of your Autelis controller.
