@@ -40,3 +40,15 @@ def test_no_command_ever_sends_temp_to_hayward():
     """The one bug that would break a real user's controller with a 500."""
     for kind, tag, value in (("circuit", "pump", 1), ("circuit", "schlor", 0)):
         assert "temp=" not in build_command(HAYWARD, kind, tag, value)
+
+
+# Kind matching is exact and case-sensitive: "Circuit" is NOT "circuit". Anything
+# outside the small allow-list is refused before a query is ever built, because a
+# plausible-looking but unhanded kind would be sent to a real controller, which
+# answers 1 for any recognised NAME -- i.e. it would look like it worked.
+@pytest.mark.parametrize("kind", ["unknown", "", "Circuit"])
+@pytest.mark.parametrize("profile", [JANDY, PENTAIR, HAYWARD])
+def test_unsupported_command_kinds_are_refused_on_every_brand(profile, kind):
+    """An unknown kind raises on all brands, whatever the tag would otherwise be."""
+    with pytest.raises(CommandNotSupported):
+        build_command(profile, kind, "pump", 1)
