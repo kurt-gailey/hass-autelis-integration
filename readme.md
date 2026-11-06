@@ -54,6 +54,7 @@ running speed is active, especially after somebody uses the physical panel.
 * **Sensors** for pool, spa, air and solar temperature — whichever your controller reports.
 * **Climate** entities for pool and spa heat — on Jandy and Pentair. Not Hayward (see above).
 * **Binary sensors** for equipment that can be seen but not commanded.
+* **Pool Controller Mode** (`auto`, `service` or `timeout`) and **Pool Controller Connected**. Circuits go unavailable when the panel leaves auto, so alert on Connected, not on a circuit.
 
 # Naming your equipment
 
