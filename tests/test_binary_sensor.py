@@ -1,6 +1,13 @@
+from types import SimpleNamespace
+
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 
-from custom_components.autelis_pool.binary_sensor import AutelisReadOnly
+from custom_components.autelis_pool.binary_sensor import (
+    AutelisConnected,
+    AutelisReadOnly,
+    async_setup_entry,
+)
+from custom_components.autelis_pool.const import DOMAIN
 
 
 class _Data:
@@ -33,3 +40,34 @@ def test_non_heat_readonly_has_no_heat_device_class():
     entity = AutelisReadOnly(_Data({"waterfall": "1"}), "waterfall", "Waterfall")
     assert entity.device_class is None
     assert entity.name == "Waterfall"
+
+
+class _Controller:
+    def __init__(self, connected, mode="service"):
+        self.connected = connected
+        self.mode = mode
+        self.host = "1.2.3.4"
+        self.inventory = []
+
+
+def test_connected_sensor_follows_the_poll_result():
+    assert AutelisConnected(_Controller(True)).is_on is True
+    assert AutelisConnected(_Controller(False)).is_on is False
+
+
+def test_connected_sensor_stays_available_in_service_mode():
+    """Service mode is what the circuits go unavailable for. This one must keep
+    reporting, or an offline alert cannot tell the two apart."""
+    assert AutelisConnected(_Controller(True, mode="service")).available is True
+
+
+async def test_setup_adds_the_connected_sensor():
+    data = _Controller(True)
+    added = []
+    hass = SimpleNamespace(data={DOMAIN: {"entry": data}})
+
+    await async_setup_entry(hass, SimpleNamespace(entry_id="entry"), lambda e, _: added.extend(e))
+
+    assert [entity.unique_id for entity in added] == ["autelis 1.2.3.4 connected"]
+    assert added[0].name == "Pool Controller Connected"
+    assert added[0].device_class == BinarySensorDeviceClass.CONNECTIVITY

@@ -53,6 +53,8 @@ def live_entity_ids(data) -> set[str]:
     """Return every entity identity that discovery produced for this controller."""
     live = {f"autelis {data.host} {item.tag}" for item in data.inventory}
     live |= {f"autelis {data.host} {hs.current_tag}" for hs in data.heat_sets}
+    # Added by the platforms, not discovery. Left out, the sweep below deletes them.
+    live |= {f"autelis {data.host} connected", f"autelis {data.host} opmode"}
     return live
 
 
@@ -130,6 +132,7 @@ class AutelisData:
         self.system: dict[str, str] = {}
         self._state_listeners: list[Callable[[], None]] = []
         self.mode = STATE_SERVICE
+        self.connected = False
 
     def async_add_state_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         """Register an entity callback for completed controller refreshes."""
@@ -144,7 +147,11 @@ class AutelisData:
     async def async_refresh(self):
         """Poll status.xml and rebuild the snapshot from scratch."""
         status = await self.api.get("status.xml")
+        self.connected = status is not None
         if status is None:
+            # mode keeps its last value here, so "circuits unavailable" means the panel
+            # is not in auto, never that the controller stopped answering. Only
+            # `connected` reports an outage.
             return
 
         if self.profile is None:

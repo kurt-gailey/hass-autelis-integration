@@ -2,7 +2,7 @@ from xml.etree import ElementTree
 
 import pytest
 
-from custom_components.autelis_pool import AutelisData
+from custom_components.autelis_pool import AutelisData, live_entity_ids
 from custom_components.autelis_pool.const import AUTELIS_HAYWARD, AUTELIS_UNKNOWN
 from tests.conftest import load_xml
 
@@ -67,3 +67,34 @@ async def test_refresh_notifies_entity_state_listeners():
     await data.async_refresh()
 
     assert calls == ["updated"]
+
+
+class _DeadAPI(_FakeAPI):
+    """A controller that stopped answering: AutelisPoolAPI.get returns None."""
+
+    async def get(self, endpoint, optional=False):
+        return None
+
+
+async def test_failed_poll_clears_connected_and_good_poll_restores_it():
+    data = AutelisData("1.2.3.4", _FakeAPI(load_xml("hayward_1011_status.xml")))
+    await data.async_refresh()
+    assert data.connected is True
+
+    good_api, data.api = data.api, _DeadAPI(None)
+    await data.async_refresh()
+    assert data.connected is False
+
+    data.api = good_api
+    await data.async_refresh()
+    assert data.connected is True
+
+
+def test_stale_entity_sweep_keeps_the_controller_status_entities():
+    """async_remove_stale_entities deletes anything not listed here, on every load."""
+    data = AutelisData("1.2.3.4", _FakeAPI(None))
+
+    live = live_entity_ids(data)
+
+    assert "autelis 1.2.3.4 connected" in live
+    assert "autelis 1.2.3.4 opmode" in live

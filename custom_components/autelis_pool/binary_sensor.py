@@ -28,7 +28,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             AutelisReadOnly(data, item.tag, item.name)
             for item in data.inventory
             if item.platform == "binary_sensor"
-        ],
+        ]
+        + [AutelisConnected(data)],
         True,
     )
 
@@ -67,6 +68,34 @@ class AutelisReadOnly(BinarySensorEntity):
     @property
     def is_on(self):
         return self.data.equipment.get(self.equipment_name, "0") not in _OFF_VALUES
+
+    async def async_update(self):
+        await self.data.update()
+
+
+class AutelisConnected(BinarySensorEntity):
+    """Whether the controller answered the last poll.
+
+    The one entity that is always available: it reports the outage the others cannot,
+    and it stays up through service mode, which is not an outage.
+    """
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+
+    def __init__(self, data):
+        self.data = data
+
+    @property
+    def name(self):
+        return "Pool Controller Connected"
+
+    @property
+    def unique_id(self):
+        return f"autelis {self.data.host} connected"
+
+    @property
+    def is_on(self):
+        return self.data.connected
 
     async def async_update(self):
         await self.data.update()
